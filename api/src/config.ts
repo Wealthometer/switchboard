@@ -37,6 +37,10 @@ const schema = z.object({
   /** Solved tickets close automatically after this many hours without a reply. */
   AUTO_CLOSE_HOURS: z.coerce.number().int().min(1).default(168),
   RATE_LIMIT: bool(true),
+  /** Run the email worker and scheduled jobs inside the API process instead of a separate worker. */
+  RUN_WORKER: bool(false),
+  /** Apply pending migrations when the API starts, for hosts without a pre-deploy step. */
+  MIGRATE_ON_START: bool(false),
 }).superRefine((c, ctx) => {
   if (c.STORAGE === "s3" && !c.S3_BUCKET) ctx.addIssue({ code: "custom", path: ["S3_BUCKET"], message: "Required when STORAGE=s3" })
 })

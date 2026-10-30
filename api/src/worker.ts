@@ -22,7 +22,8 @@ export async function deliver(mailer: ReturnType<typeof createMailer>, email: Em
   return info.messageId
 }
 
-async function main() {
+/** Starts the email queue consumer and the scheduled jobs; returns a function that stops them. */
+export async function startWorker() {
   const db = new Database()
   const realtime = new RealtimePublisher()
   const email = new EmailQueue()
@@ -65,15 +66,22 @@ async function main() {
   ]
   log("worker started", { smtp: Boolean(config().SMTP_URL) })
 
-  const stop = async (signal: string) => {
+  return async (signal: string) => {
     log("shutting down", { signal })
     timers.forEach(clearInterval)
     await worker.close()
     await Promise.allSettled([email.onModuleDestroy(), realtime.onModuleDestroy(), db.onModuleDestroy(), connection.quit()])
+  }
+}
+
+async function main() {
+  const stop = await startWorker()
+  const exit = async (signal: string) => {
+    await stop(signal)
     process.exit(0)
   }
-  process.on("SIGTERM", () => void stop("SIGTERM"))
-  process.on("SIGINT", () => void stop("SIGINT"))
+  process.on("SIGTERM", () => void exit("SIGTERM"))
+  process.on("SIGINT", () => void exit("SIGINT"))
 }
 
 if (require.main === module) void main()

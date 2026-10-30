@@ -1,9 +1,20 @@
-# Render Blueprint: the API and the background worker, built from api/Dockerfile.
+# Render Blueprint: the API on Render's free plan, built from api/Dockerfile.
 # The web app is deployed on Vercel (see web/vercel.json), PostgreSQL on Supabase and Redis on Upstash.
 # Values marked sync: false are entered in the Render dashboard when you create the Blueprint.
+#
+# The free plan has no background workers and no pre-deploy command, so the API runs the worker
+# (RUN_WORKER) and applies migrations when it starts (MIGRATE_ON_START). It also sleeps after
+# 15 idle minutes: the first request then takes up to a minute, and scheduled jobs pause meanwhile.
 
-envVarGroups:
-  - name: switchboard
+services:
+  - type: web
+    name: switchboard-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: frankfurt # Closest Render region to the database (Supabase eu-north-1, Stockholm).
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -21,6 +32,9 @@ envVarGroups:
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+      # Browser → Vercel → Render's load balancer → API. Two trusted hops give rate limits the real client IP.
+      - key: TRUST_PROXY
+        value: "2"
       # Real email. Without it emails are only logged, so portal links and invites never arrive.
       # Brevo: smtp://<login, with @ as %40>:<SMTP key>@smtp-relay.brevo.com:587
       - key: SMTP_URL
@@ -28,6 +42,7 @@ envVarGroups:
       - key: MAIL_FROM
         sync: false
       # Render's disk is wiped on each deploy, so attachments go to an S3-compatible bucket.
+      # Supabase Storage: endpoint https://<project-ref>.storage.supabase.co/storage/v1/s3, region eu-north-1.
       - key: STORAGE
         value: s3
       - key: S3_BUCKET
@@ -40,33 +55,10 @@ envVarGroups:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
-      # API + worker together must stay under the database's connection limit.
+      - key: RUN_WORKER
+        value: "true"
+      - key: MIGRATE_ON_START
+        value: "true"
+      # The API and its in-process worker each open up to this many connections (Supabase free pooler: ~15).
       - key: DB_POOL_MAX
         value: "5"
-
-services:
-  - type: web
-    name: switchboard-api
-    runtime: docker
-    dockerfilePath: ./api/Dockerfile
-    dockerContext: .
-    plan: starter
-    region: frankfurt # Closest Render region to the database (Supabase eu-north-1, Stockholm).
-    healthCheckPath: /health
-    preDeployCommand: node dist/database/migrate.js
-    envVars:
-      - fromGroup: switchboard
-      # Browser → Vercel → Render's load balancer → API. Two trusted hops give rate limits the real client IP.
-      - key: TRUST_PROXY
-        value: "2"
-
-  - type: worker
-    name: switchboard-worker
-    runtime: docker
-    dockerfilePath: ./api/Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/worker.js
-    plan: starter
-    region: frankfurt # Closest Render region to the database (Supabase eu-north-1, Stockholm).
-    envVars:
-      - fromGroup: switchboard
