@@ -1,0 +1,27 @@
+{
+  "name": "switchboard",
+  "private": true,
+  "description": "Multi-tenant customer support and ticketing for small teams.",
+  "license": "MIT",
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,yellow \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev:api": "npm run dev -w api",
+    "dev:web": "npm run dev -w web",
+    "migrate": "npm run migrate -w api",
+    "seed:demo": "npm run seed:demo -w api",
+    "build": "npm run build -w api && npm run build -w web",
+    "typecheck": "npm run typecheck -w api && npm run typecheck -w web",
+    "test": "npm test -w api"
+  },
+  "overrides": {
+    "multer": "^2.5.0",
+    "js-yaml": "^5.4.1"
+  }
+}
